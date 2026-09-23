@@ -1,0 +1,4 @@
+name = "apb-detailing"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-09-01"
+# Use the free Workers plan. Set secrets in the Pages dashboard, never here.
