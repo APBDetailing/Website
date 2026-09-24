@@ -1,6 +1,7 @@
 import {handled,checkOrigin,readJson,validateEnquiry,assert,json} from '../_lib/security.js';
 import {serverDb,checked} from '../_lib/db.js';
-export const onRequestPost=handled(async({request,env})=>{
+import {notifyEnquiry} from '../_lib/push.js';
+export const onRequestPost=handled(async({request,env,waitUntil})=>{
  checkOrigin(request,env);const value=await readJson(request),enquiry=validateEnquiry(value);
  assert(env.TURNSTILE_SECRET_KEY&&env.RATE_LIMIT_SALT?.length>=32,503,'The enquiry form is temporarily unavailable. Please try again later.');
  const db=serverDb(env),ip=request.headers.get('CF-Connecting-IP');assert(ip,503,'Unable to verify this request.');
@@ -11,5 +12,7 @@ export const onRequestPost=handled(async({request,env})=>{
  assert(verify.ok,503,'The security check is unavailable. Please try again shortly.');const result=await verify.json();
  assert(result.success&&result.action==='quote'&&result.hostname===new URL(env.SITE_URL).hostname,400,'The security check expired. Please try again.');
  const {data:service}=await db.from('services').select('name').eq('id',enquiry.service_id).eq('enabled',true).maybeSingle();assert(service,400,'Please choose an available service.');
- checked(await db.from('enquiries').insert({...enquiry,service_name:service.name}));return json({success:true});
+ const saved=checked(await db.from('enquiries').insert({...enquiry,service_name:service.name}).select('id,name,service_name').single());
+ waitUntil(notifyEnquiry(db,env,saved).catch(()=>console.error('APB push unavailable; enquiry saved')));
+ return json({success:true});
 });
